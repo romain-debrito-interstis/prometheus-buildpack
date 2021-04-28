@@ -1,0 +1,65 @@
+#!/bin/bash
+
+set -e
+
+BUILD_DIR=${1:-}
+CACHE_DIR=${2:-}
+ENV_DIR=${3:-}
+basedir="$( cd -P "$( dirname "$0" )" && pwd )"
+BUILDPACK_DIR="$(readlink -f ${basedir}/..)"
+source ${BUILDPACK_DIR}/lib/common.sh
+
+if [ -n "$BUILDPACK_DEBUG" ]; then
+  set -x
+fi
+
+PROMETHEUS_VERSION="${PROMETHEUS_VERSION:-2.26.0}"
+
+install_prometheus() {
+  local BUILD_DIR=${1}
+  local CACHE_DIR=${2}
+
+  prometheus_dist="prometheus-${PROMETHEUS_VERSION}.linux-amd64"
+  prometheus_archive="${prometheus_dist}.tar.gz"
+  prometheus_checksums="sha256sums.txt"
+  prometheus_url="https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}"
+
+  if [[ -f "$CACHE_DIR/.PROMETHEUS_VERSION" ]]; then
+    old_version=$(cat $CACHE_DIR/.PROMETHEUS_VERSION)
+    if [[ $old_version != $PROMETHEUS_VERSION ]]; then
+      echo "New Prometheus version installation, cleaning the cache for the old version"
+      rm -f $CACHE_DIR/$old_version.tar.gz ${CACHE_DIR}/${prometheus_archive}*
+    fi
+  fi
+
+  if [[ ! -f "$CACHE_DIR/prometheus" ]]; then
+    echo -n "Downloading the Prometheus ${PROMETHEUS_VERSION} archive..."
+    curl --silent --fail --location --retry 3 --retry-delay 2 --connect-timeout 3 --max-time 30 --output ${CACHE_DIR}/${prometheus_archive} "${prometheus_url}/${prometheus_archive}"
+    echo " done"
+    echo $PROMETHEUS_VERSION > ${CACHE_DIR}/.PROMETHEUS_VERSION
+  else
+    echo "Get the Prometheus ${PROMETHEUS_VERSION} archive from the cache"
+  fi
+
+  echo -n "Checking Prometheus archive checksum..."
+  curl --silent --fail --location --retry 3 --retry-delay 2 --connect-timeout 3 --max-time 30 --output ${CACHE_DIR}/${prometheus_archive}.sha256 "${prometheus_url}/${prometheus_checksums}"
+  if [[ $(sha256sum ${CACHE_DIR}/${prometheus_archive} | cut -f 1 -d " ") != $(cat ${CACHE_DIR}/${prometheus_archive}.sha256 | grep $prometheus_archive | cut -f 1 -d " ") ]]; then
+    echo 2>&1 "Wrong checksum"
+    return 1
+  fi
+  echo " ok"
+
+  echo -n "Extracting the Prometheus archive..."
+  tar xzf ${CACHE_DIR}/${prometheus_archive} --directory=$BUILD_DIR
+  mv ${BUILD_DIR}/${prometheus_dist} ${BUILD_DIR}/prometheus
+  echo " done"
+
+  echo -n "Copying the vendored scripts from the buildpack..."
+  cp ${BUILDPACK_DIR}/opt/* ${BUILD_DIR}
+  echo " done"
+}
+
+mkdir -p $CACHE_DIR
+export_env_dir "$ENV_DIR"
+
+install_prometheus ${BUILD_DIR} ${CACHE_DIR}
