@@ -7,6 +7,15 @@ remote_write:
     basic_auth:
       username: "<%= ENV["PROMSCALE_AUTH_USERNAME"] %>"
       password: "<%= ENV["PROMSCALE_AUTH_PASSWORD"] %>"
+    remote_timeout: 30s
+    queue_config:
+      capacity: 10000
+      max_samples_per_send: 3000
+      batch_send_deadline: 10s
+      min_shards: 4
+      max_shards: 200
+      min_backoff: 100ms
+      max_backoff: 10s
 
 remote_read:
   - url: "<%= promscale_url %>/read"
