@@ -32,7 +32,7 @@ install_prometheus() {
     fi
   fi
 
-  if [[ ! -f "$CACHE_DIR/prometheus" ]]; then
+  if [[ ! -f "$CACHE_DIR/${prometheus_archive}" ]]; then
     echo -n "Downloading the Prometheus ${PROMETHEUS_VERSION} archive..."
     curl --silent --fail --location --retry 3 --retry-delay 2 --connect-timeout 3 --max-time 30 --output ${CACHE_DIR}/${prometheus_archive} "${prometheus_url}/${prometheus_archive}"
     echo " done"
