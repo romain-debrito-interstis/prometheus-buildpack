@@ -25,11 +25,12 @@ remote_read:
       password: "<%= ENV["PROMSCALE_AUTH_PASSWORD"] %>"
 
 scrape_configs:
-# Get self-metrics
+# Get Prometheus self-metrics
 - job_name: "prometheus"
   static_configs:
-    - targets: ["<%= ENV["APP"] %>.osc-st-fr1.apps.st-sc.fr"]
+    - targets: ["<%= ENV["CANONICAL_HOST"] %>"]
 
+# Get Promscale metrics as it is the remote storage
 - job_name: "promscale"
   basic_auth:
     username: "<%= ENV["PROMSCALE_AUTH_USERNAME"] %>"
@@ -37,10 +38,5 @@ scrape_configs:
   static_configs:
     - targets: ["<%= ENV["PROMSCALE_HOSTNAME"] %>"]
 
-- job_name: "gitaly"
-  static_configs:
-    - targets: ["<%= target_gitaly %>"]
-
-- job_name: "praefect"
-  static_configs:
-    - targets: ["<%= target_praefect %>"]
+# Get user-defined metrics
+<%= scrape_configs.to_yaml.gsub("---\n", "") %>

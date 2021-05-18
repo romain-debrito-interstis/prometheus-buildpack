@@ -4,6 +4,10 @@ This buildpack aims at deploying a Prometheus instance on the [Scalingo](https:/
 
 ## Configuration
 
+### Self Metrics
+
+The `CANONICAL_HOST` environment variable must be defined with the Prometheus application hostname (e.g. `my-app.osc-fr1.scalingo.io`).
+
 ### Basic Authentication
 
 This buildpack makes it mandatory to enable a Basic Auth protection. The application must define the `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD` environment variables with the credentials.
@@ -13,6 +17,37 @@ This buildpack makes it mandatory to enable a Basic Auth protection. The applica
 You may want to connect Prometheus to a Promscale instance. In this case, one need to provide the hostname (`PROMSCALE_HOSTNAME`), and the Promscale Basic Auth credentials (`PROMSCALE_AUTH_USERNAME` and `PROMSCALE_AUTH_PASSWORD`).
 
 Promscale is currently the only available backend. Feel free to open an issue and a pull request to support various backends.
+
+### Scrape Configs
+
+Define the environment variable `PROMETHEUS_SCRAPE_CONFIGS` with a JSON containing the equivalent of the YAML configuration for the Prometheus [scrape config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config).
+
+For example:
+
+```json
+[
+  {
+    "job_name": "gitaly",
+    "static_configs": [
+      {
+        "targets": [
+          "gitaly-1-0.example:9236"
+        ]
+      }
+    ]
+  },
+  {
+    "job_name": "praefect",
+    "static_configs": [
+      {
+        "targets": [
+          "gitaly-1-0.example:10101"
+        ]
+      }
+    ]
+  }
+]
+```
 
 ## Defining the Version
 

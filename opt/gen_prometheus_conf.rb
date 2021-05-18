@@ -1,19 +1,16 @@
 #!/usr/bin/env ruby
 
 require "erb"
+require "json"
+require "yaml"
 
 def promscale_url
   return "https://#{ENV["PROMSCALE_HOSTNAME"]}"
 end
 
-def target_praefect
-  # gitaly-1-0
-  return "ip-10-0-0-171.osc-st-fr1.st-sc.fr:10101"
-end
-
-def target_gitaly
-  # gitaly-1-0
-  return "ip-10-0-0-171.osc-st-fr1.st-sc.fr:9236"
+def scrape_configs
+  prometheus_scrape_configs = ENV["PROMETHEUS_SCRAPE_CONFIGS"] || []
+  return JSON.parse(prometheus_scrape_configs)
 end
 
 content = File.read "/app/prometheus.yml.erb"
