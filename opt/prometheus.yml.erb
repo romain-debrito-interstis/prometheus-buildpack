@@ -27,6 +27,9 @@ remote_read:
 scrape_configs:
 # Get Prometheus self-metrics
 - job_name: "prometheus"
+  basic_auth:
+    username: "<%= ENV["BASIC_AUTH_USERNAME"] %>"
+    password: "<%= ENV["BASIC_AUTH_PASSWORD"] %>"
   static_configs:
     - targets: ["<%= ENV["CANONICAL_HOST"] %>"]
 
