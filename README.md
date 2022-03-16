@@ -18,6 +18,13 @@ You may want to connect Prometheus to a Promscale instance. In this case, one ne
 
 Promscale is currently the only available backend. Feel free to open an issue and a pull request to support various backends.
 
+### Prometheus configuration
+
+Global Prometheus configuration can be configured using the following environment variables:
+
+* `PROMETHEUS_GLOBAL_EVALUATION_INTERVAL` (default: `1m`): How frequently to evaluate rules
+* `PROMETHEUS_GLOBAL_SCRAPE_INTERVAL` (default: `1m`): How frequently to scrape targets by default
+
 ### Scrape Configs
 
 Define the environment variable `PROMETHEUS_SCRAPE_CONFIGS` with a JSON containing the equivalent of the YAML configuration for the Prometheus [scrape config](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config).
