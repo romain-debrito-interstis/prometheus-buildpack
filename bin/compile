@@ -13,7 +13,7 @@ if [ -n "$BUILDPACK_DEBUG" ]; then
   set -x
 fi
 
-PROMETHEUS_VERSION="${PROMETHEUS_VERSION:-2.33.0}"
+PROMETHEUS_VERSION="${PROMETHEUS_VERSION:-2.55.1}"
 
 install_prometheus() {
   local BUILD_DIR=${1}
