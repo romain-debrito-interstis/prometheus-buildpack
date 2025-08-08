@@ -13,11 +13,11 @@ if [ -n "$BUILDPACK_DEBUG" ]; then
   set -x
 fi
 
-PROMETHEUS_VERSION="${PROMETHEUS_VERSION:-2.55.1}"
+PROMETHEUS_VERSION="${PROMETHEUS_VERSION:-"3.5.0"}"
 
 install_prometheus() {
-  local BUILD_DIR=${1}
-  local CACHE_DIR=${2}
+  local BUILD_DIR="${1}"
+  local CACHE_DIR="${2}"
 
   prometheus_dist="prometheus-${PROMETHEUS_VERSION}.linux-amd64"
   prometheus_archive="${prometheus_dist}.tar.gz"
