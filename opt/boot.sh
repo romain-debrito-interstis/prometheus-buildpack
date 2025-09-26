@@ -19,13 +19,6 @@ if [[ -z "$PROMSCALE_HOSTNAME" ]]; then
   exit -1
 fi
 
-echo "Using Promscale as Prometheus storage backend"
-
-if [[ -z "$PROMSCALE_AUTH_USERNAME" ]] || [[ -z "$PROMSCALE_AUTH_PASSWORD" ]]; then
-  echo >&2 "The environment variables PROMSCALE_AUTH_USERNAME and PROMSCALE_AUTH_PASSWORD are mandatory to connect to Promscale"
-  exit -1
-fi
-
 echo "Generating the Prometheus configuration file"
 ruby /app/gen_prometheus_conf.rb > /app/prometheus.yml
 
