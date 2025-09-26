@@ -14,11 +14,6 @@ if [[ -z "$BASIC_AUTH_USERNAME" ]] || [[ -z "$BASIC_AUTH_PASSWORD" ]]; then
   exit -1
 fi
 
-if [[ -z "$PROMSCALE_HOSTNAME" ]]; then
-  echo >&2 "The environment variable PROMSCALE_HOSTNAME must be set"
-  exit -1
-fi
-
 echo "Generating the Prometheus configuration file"
 ruby /app/gen_prometheus_conf.rb > /app/prometheus.yml
 
