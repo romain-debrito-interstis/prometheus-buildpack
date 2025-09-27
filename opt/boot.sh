@@ -17,6 +17,6 @@ fi
 echo "Generating the Prometheus configuration file"
 ruby /app/gen_prometheus_conf.rb > /app/prometheus.yml
 
-/app/prometheus/prometheus --web.listen-address=127.0.0.1:9090 \
+/app/prometheus/prometheus --web.listen-address=:${PORT:-9090} \
   --web.external-url=https://${CANONICAL_HOST} \
   --web.route-prefix="/"
