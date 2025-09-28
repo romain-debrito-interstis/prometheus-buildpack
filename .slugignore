@@ -1,0 +1,22 @@
+# Fichiers de configuration inutiles en production
+*.erb
+*.bak
+*.md
+.git/
+.gitignore
+README.md
+
+# Fichiers de développement
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Fichiers temporaires
+*.tmp
+*~
+
+# Anciens fichiers de configuration à supprimer
+gen_prometheus_conf.rb
+prometheus-custom.yml
+prometheus.yml.erb

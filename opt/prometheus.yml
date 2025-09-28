@@ -1,0 +1,50 @@
+# Configuration globale
+global:
+  
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  scrape_timeout: 10s
+
+# Configuration pour le stockage des métriques dans InfluxDB
+remote_write:
+  - url: http://${INFLUX_HOST_PORT}/api/v1/prom/write?db=${INFLUX_DB}
+    basic_auth:
+      username: ${INFLUX_USER}
+      password: ${INFLUX_PASSWORD}
+    # On ne conserve que les métriques importantes pour économiser de l'espace
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'up|process_.*|nodejs_.*|http_.*|scalingo_.*'
+        action: keep
+
+# Configuration des cibles à surveiller
+scrape_configs:
+  # Auto-surveillance de Prometheus
+  - job_name: "prometheus"
+    basic_auth:
+      username: ${BASIC_AUTH_USERNAME}
+      password: ${BASIC_AUTH_PASSWORD}
+    static_configs:
+      - targets: ["${CANONICAL_HOST}"]
+        labels:
+          instance: "prometheus"
+          env: "production"
+
+  # Application scalingo via n8n 
+  - job_name: 'scalingo_apps_multi'
+    metrics_path: '/'
+    static_configs:
+      - targets: ['192.168.194.77:5678']
+
+  # Application Node.js principale
+  - job_name: 'node-app'
+    metrics_path: '/metrics'
+    scheme: 'https'
+    basic_auth:
+      username: ${BASIC_AUTH_USERNAME}
+      password: ${BASIC_AUTH_PASSWORD}
+    static_configs:
+      - targets: ["${CANONICAL_HOST}"]
+        labels:
+          job: 'node-app'
+          env: 'production'

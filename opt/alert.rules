@@ -1,0 +1,20 @@
+groups:
+- name: scalingo.rules
+  rules:
+  - alert: InstanceDown
+    expr: up == 0
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Instance {{ $labels.instance }} down"
+      description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 5 minutes."
+
+  - alert: HighRequestLatency
+    expr: http_request_duration_seconds:rate5m > 1
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High request latency on {{ $labels.instance }}"
+      description: "{{ $labels.instance }} has high request latency: {{ $value }}s"
