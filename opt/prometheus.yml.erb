@@ -42,24 +42,27 @@ scrape_configs:
         regex: '([^:]+)(?::\d+)?'
         replacement: '${1}'
 
-  # Exemple de configuration pour un exporter personnalisé
-  - job_name: 'custom-exporter'
+  # Configuration pour l'exporter personnalisé Node.js
+  - job_name: 'nodejs-app-metrics'
     scrape_interval: 30s
     scrape_timeout: 10s
-    metrics_path: '/metrics'  # Chemin par défaut, à adapter selon votre exporter
-    scheme: http              # ou https si nécessaire
+    metrics_path: '/metrics'
+    scheme: https
     static_configs:
-      - targets: ['localhost:9100']  # À remplacer par l'URL de votre exporter
+      - targets: ['poc-logs-n8n.osc-fr1.scalingo.io']
         labels:
-          app: 'custom-app'    # Libellé pour faciliter le filtrage
-          env: 'production'    # Environnement
+          app: 'nodejs-app'
+          env: 'production'
+          team: 'devops'
+    tls_config:
+      insecure_skip_verify: true  # À désactiver en production avec un vrai certificat
     relabel_configs:
       - source_labels: [__address__]
-        target_label: __metrics_path__
-        replacement: /metrics
+        target_label: __address__
+        replacement: ${1}:443
       - source_labels: [__address__]
         target_label: instance
-        regex: '([^:]+)(?::\d+)?'
+        regex: '([^:]+)'
         replacement: '${1}'
 
 # Configuration utilisateur supplémentaire
