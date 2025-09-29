@@ -1,0 +1,23 @@
+groups:
+- name: custom-metrics
+  rules:
+  # Métriques personnalisées pour votre application
+  - record: app:http_requests:rate5m
+    expr: rate(http_requests_total[5m])
+    labels:
+      metric: custom_requests_rate
+      unit: requests_per_second
+
+  # Taux d'erreur personnalisé
+  - record: app:http_errors:rate5m
+    expr: rate(http_requests_total{status=~"[45].."}[5m])
+    labels:
+      metric: custom_errors_rate
+      unit: errors_per_second
+
+  # Latence des requêtes par endpoint
+  - record: app:http_request_duration_seconds:avg_by_endpoint
+    expr: sum(rate(http_request_duration_seconds_sum[5m])) by (endpoint) / sum(rate(http_request_duration_seconds_count[5m])) by (endpoint)
+    labels:
+      metric: endpoint_latency
+      unit: seconds

@@ -1,0 +1,79 @@
+groups:
+- name: app-performance
+  rules:
+  # CPU Usage
+  - record: instance:node_cpu_utilisation:rate5m
+    expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100
+    labels:
+      severity: warning
+      metric: cpu_usage
+      unit: percent
+
+  # Mémoire utilisée (RAM)
+  - record: instance:node_memory_utilisation:ratio
+    expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+    labels:
+      severity: warning
+      metric: memory_usage
+      unit: percent
+
+  # Latence moyenne des requêtes HTTP (en secondes)
+  - record: http_request_duration_seconds:avg_rate5m
+    expr: rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m])
+    labels:
+      severity: warning
+      metric: http_request_latency
+      unit: seconds
+
+  # Nombre de requêtes par seconde (RPS/QPS)
+  - record: http_requests:rate5m
+    expr: rate(http_requests_total[5m])
+    labels:
+      severity: info
+      metric: requests_per_second
+      unit: requests_per_second
+
+  # Taux d'erreurs (5xx, 4xx)
+  - record: http_requests_error_rate:ratio_rate5m
+    expr: sum(rate(http_requests_total{status=~"[45].."}[5m])) by (status, instance, job) / sum(rate(http_requests_total[5m])) by (instance, job) * 100
+    labels:
+      severity: critical
+      metric: http_error_rate
+      unit: percent
+
+  # Alertes
+  - alert: HighCpuUsage
+    expr: instance:node_cpu_utilisation:rate5m > 80
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "CPU usage is high on {{ $labels.instance }}"
+      description: "CPU usage is at {{ $value }}%"
+
+  - alert: HighMemoryUsage
+    expr: instance:node_memory_utilisation:ratio > 85
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Memory usage is high on {{ $labels.instance }}"
+      description: "Memory usage is at {{ $value }}%"
+
+  - alert: HighHttpLatency
+    expr: http_request_duration_seconds:avg_rate5m > 1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High HTTP request latency on {{ $labels.instance }}"
+      description: "Average request latency is {{ $value }}s"
+
+  - alert: HighErrorRate
+    expr: sum(rate(http_requests_total{status=~"[45].."}[5m])) by (status, instance, job) / sum(rate(http_requests_total[5m])) by (instance, job) * 100 > 5
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "High error rate on {{ $labels.instance }}"
+      description: "Error rate for HTTP {{ $labels.status }} is {{ $value }}%"

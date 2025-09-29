@@ -1,15 +1,66 @@
 global:
-  scrape_interval:     <%= ENV["PROMETHEUS_GLOBAL_SCRAPE_INTERVAL"] || "1m" %>
-  evaluation_interval: <%= ENV["PROMETHEUS_GLOBAL_EVALUATION_INTERVAL"] || "1m" %>
+  scrape_interval:     <%= ENV["PROMETHEUS_GLOBAL_SCRAPE_INTERVAL"] || "30s" %>
+  scrape_timeout:      <%= ENV["PROMETHEUS_SCRAPE_TIMEOUT"] || "10s" %>
+  evaluation_interval: <%= ENV["PROMETHEUS_GLOBAL_EVALUATION_INTERVAL"] || "30s" %>
+
+# Chargement des fichiers de règles
+rule_files:
+  <% rules_files.each do |rule_file| %>
+  - /etc/prometheus/<%= rule_file %>
+  <% end %>
+
+# Configuration pour l'envoi des données vers InfluxDB
+remote_write:
+  - url: <%= ENV["SCALINGO_INFLUX_URL"].gsub(/\/\w+$/, '/api/v1/prom/write?db=' + ENV["INFLUX_USER"]) %>
+    basic_auth:
+      username: <%= ENV["INFLUX_USER"] %>
+      password: <%= ENV["INFLUX_PASSWORD"] %>
+    queue_config:
+      max_samples_per_send: 10000
+      max_shards: 200
+      capacity: 10000
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'up|(ALERTS|ALERTS_FOR_STATE|scrape_.*)'
+        action: keep
 
 scrape_configs:
-# Get Prometheus self-metrics
-- job_name: "prometheus"
-  basic_auth:
-    username: "<%= ENV["BASIC_AUTH_USERNAME"] %>"
-    password: "<%= ENV["BASIC_AUTH_PASSWORD"] %>"
-  static_configs:
-    - targets: ["<%= ENV["CANONICAL_HOST"] %>"]
+  # Métriques de Prometheus lui-même
+  - job_name: "prometheus"
+    basic_auth:
+      username: "<%= ENV["BASIC_AUTH_USERNAME"] %>"
+      password: "<%= ENV["BASIC_AUTH_PASSWORD"] %>"
+    static_configs:
+      - targets: ["<%= ENV["CANONICAL_HOST"] %>"]
+    # Ajout de métadonnées pour faciliter le filtrage dans InfluxDB
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __metrics_path__
+        replacement: /metrics
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '([^:]+)(?::\d+)?'
+        replacement: '${1}'
 
-# Get user-defined metrics
+  # Exemple de configuration pour un exporter personnalisé
+  - job_name: 'custom-exporter'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'  # Chemin par défaut, à adapter selon votre exporter
+    scheme: http              # ou https si nécessaire
+    static_configs:
+      - targets: ['localhost:9100']  # À remplacer par l'URL de votre exporter
+        labels:
+          app: 'custom-app'    # Libellé pour faciliter le filtrage
+          env: 'production'    # Environnement
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __metrics_path__
+        replacement: /metrics
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '([^:]+)(?::\d+)?'
+        replacement: '${1}'
+
+# Configuration utilisateur supplémentaire
 <%= scrape_configs.to_yaml.gsub("---\n", "") %>
