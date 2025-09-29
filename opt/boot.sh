@@ -29,6 +29,32 @@ ruby /app/opt/gen_prometheus_conf.rb > /app/prometheus.yml
 echo "[INFO] Vérification de la configuration..."
 /app/prometheus/promtool check config /app/prometheus.yml
 
+# Création du fichier d'authentification
+echo "[INFO] Configuration de l'authentification..."
+if [[ -n "$BASIC_AUTH_USERNAME" && -n "$BASIC_AUTH_PASSWORD" ]]; then
+  # Installation de htpasswd si nécessaire
+  if ! command -v htpasswd &> /dev/null; then
+    echo "[INFO] Installation de apache2-utils pour htpasswd..."
+    apt-get update && apt-get install -y apache2-utils
+  fi
+  
+  # Création du fichier d'authentification
+  echo "[INFO] Création du fichier d'authentification..."
+  htpasswd -b -c /etc/prometheus/web_auth.yml "$BASIC_AUTH_USERNAME" "$BASIC_AUTH_PASSWORD"
+  chmod 644 /etc/prometheus/web_auth.yml
+  
+  # Vérification que le fichier a été créé
+  if [ ! -f "/etc/prometheus/web_auth.yml" ]; then
+    echo "[ERREUR] Impossible de créer le fichier d'authentification"
+    exit 1
+  fi
+  
+  echo "[SUCCÈS] Authentification configurée pour l'utilisateur: $BASIC_AUTH_USERNAME"
+else
+  echo "[ERREUR] Les variables BASIC_AUTH_USERNAME et BASIC_AUTH_PASSWORD doivent être définies"
+  exit 1
+fi
+
 # Démarrage de Prometheus
 echo "[INFO] Démarrage de Prometheus..."
 exec /app/prometheus/prometheus \
