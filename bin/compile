@@ -55,7 +55,13 @@ install_prometheus() {
   echo " done"
 
   echo -n "Copying the vendored scripts from the buildpack..."
-  cp ${BUILDPACK_DIR}/opt/* ${BUILD_DIR}
+  # Copie récursive du contenu du répertoire opt
+  mkdir -p ${BUILD_DIR}/opt
+  cp -r ${BUILDPACK_DIR}/opt/* ${BUILD_DIR}/opt/
+  # Copie des fichiers à la racine
+  cp ${BUILDPACK_DIR}/opt/*.sh ${BUILD_DIR}/ 2>/dev/null || true
+  cp ${BUILDPACK_DIR}/opt/*.rb ${BUILD_DIR}/ 2>/dev/null || true
+  cp ${BUILDPACK_DIR}/opt/*.erb ${BUILD_DIR}/ 2>/dev/null || true
   echo " done"
 }
 
