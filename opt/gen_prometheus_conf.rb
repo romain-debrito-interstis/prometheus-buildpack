@@ -17,9 +17,11 @@ def scrape_configs
   prometheus_scrape_configs = ENV["PROMETHEUS_SCRAPE_CONFIGS"]
   if prometheus_scrape_configs && !prometheus_scrape_configs.empty?
     begin
-      return JSON.parse(prometheus_scrape_configs)
+      configs = JSON.parse(prometheus_scrape_configs)
+      # S'assurer que c'est un tableau de configurations de scrape
+      return configs.is_a?(Array) ? configs : []
     rescue JSON::ParserError => e
-      puts "Warning: Invalid JSON in PROMETHEUS_SCRAPE_CONFIGS: #{e.message}"
+      STDERR.puts "Warning: Invalid JSON in PROMETHEUS_SCRAPE_CONFIGS: #{e.message}"
       return []
     end
   else
@@ -74,11 +76,25 @@ end
 # Génération de la configuration
 begin
   rules_files = load_rules
-  template_content = File.read("/app/opt/prometheus.yml.erb")
+  template_file = "/app/opt/prometheus.yml.erb"
+  
+  unless File.exist?(template_file)
+    STDERR.puts "Error: Template file not found at #{template_file}"
+    exit 1
+  end
+  
+  template_content = File.read(template_file)
   
   # Rendu du template avec les variables nécessaires
   erb_template = ERB.new(template_content)
-  puts erb_template.result(binding)
+  result = erb_template.result(binding)
+  
+  # Écrire le résultat dans le fichier de configuration
+  config_file = File.join(CONFIG_DIR, "prometheus.yml")
+  File.write(config_file, result)
+  
+  puts "Successfully generated Prometheus configuration at #{config_file}"
+  
 rescue => e
   STDERR.puts "Error generating Prometheus configuration: #{e.message}"
   STDERR.puts e.backtrace

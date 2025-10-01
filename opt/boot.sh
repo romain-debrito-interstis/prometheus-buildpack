@@ -30,7 +30,7 @@ chmod -R 755 "${PROMETHEUS_CONFIG_DIR}"
 
 # Génération de la configuration
 echo "[INFO] Génération de la configuration Prometheus..."
-if ! ruby /app/opt/gen_prometheus_conf.rb > "${PROMETHEUS_CONFIG_DIR}/prometheus.yml"; then
+if ! ruby /app/opt/gen_prometheus_conf.rb; then
   echo "[ERREUR] Échec de la génération de la configuration"
   exit 1
 fi
@@ -42,25 +42,17 @@ if ! /app/prometheus/promtool check config "${PROMETHEUS_CONFIG_DIR}/prometheus.
   exit 1
 fi
 
-# Création du fichier d'authentification
+# Création du fichier d'authentification pour l'interface web
 echo "[INFO] Configuration de l'authentification..."
 if [[ -n "$BASIC_AUTH_USERNAME" && -n "$BASIC_AUTH_PASSWORD" ]]; then
-  # Création du fichier d'authentification avec openssl (plus portable)
-  echo "[INFO] Création du fichier d'authentification..."
-  if command -v htpasswd &> /dev/null; then
-    htpasswd -b -c "${PROMETHEUS_CONFIG_DIR}/web_auth.yml" "$BASIC_AUTH_USERNAME" "$BASIC_AUTH_PASSWORD"
-  else
-    # Alternative avec openssl
-    echo "$BASIC_AUTH_USERNAME:$(openssl passwd -apr1 "$BASIC_AUTH_PASSWORD")" > "${PROMETHEUS_CONFIG_DIR}/web_auth.yml"
-  fi
-
-  chmod 644 "${PROMETHEUS_CONFIG_DIR}/web_auth.yml"
-
-  # Vérification que le fichier a été créé
-  if [ ! -f "${PROMETHEUS_CONFIG_DIR}/web_auth.yml" ]; then
-    echo "[ERREUR] Impossible de créer le fichier d'authentification"
-    exit 1
-  fi
+  # Créer un fichier de configuration web avec authentification basique
+  web_config_content = <<~YAML
+    basic_auth_users:
+      "#{ENV["BASIC_AUTH_USERNAME"]}": "#{ENV["BASIC_AUTH_PASSWORD"]}"
+  YAML
+  
+  echo "$web_config_content" > "${PROMETHEUS_CONFIG_DIR}/web.yml"
+  chmod 644 "${PROMETHEUS_CONFIG_DIR}/web.yml"
 
   echo "[SUCCÈS] Authentification configurée pour l'utilisateur: $BASIC_AUTH_USERNAME"  
 else
@@ -72,6 +64,7 @@ fi
 echo "[INFO] Démarrage de Prometheus..."
 echo "[INFO] Répertoire des données: ${PROMETHEUS_DATA_DIR}"
 echo "[INFO] Répertoire de configuration: ${PROMETHEUS_CONFIG_DIR}"
+echo "[INFO] Fichier de configuration: ${PROMETHEUS_CONFIG_DIR}/prometheus.yml"
 
 exec /app/prometheus/prometheus \
   --config.file="${PROMETHEUS_CONFIG_DIR}/prometheus.yml" \

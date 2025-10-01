@@ -1,20 +1,14 @@
 # Configuration globale
 global:
-  scrape_interval:     <%= ENV["PROMETHEUS_GLOBAL_SCRAPE_INTERVAL"] || "30s" %>
-  scrape_timeout:      <%= ENV["PROMETHEUS_SCRAPE_TIMEOUT"] || "10s" %>
-  evaluation_interval: <%= ENV["PROMETHEUS_GLOBAL_EVALUATION_INTERVAL"] || "30s" %>     
-
-# Configuration de l'interface web
-web:
-  enable_admin_api: true
-  page_title: "Prometheus - Tableau de bord de surveillance"
-  basic_auth_users: "/app/config/web_auth.yml"
+  scrape_interval: <%= ENV["PROMETHEUS_GLOBAL_SCRAPE_INTERVAL"] || "30s" %>
+  scrape_timeout: <%= ENV["PROMETHEUS_SCRAPE_TIMEOUT"] || "10s" %>
+  evaluation_interval: <%= ENV["PROMETHEUS_GLOBAL_EVALUATION_INTERVAL"] || "30s" %>
 
 # Chargement des fichiers de règles
 rule_files:
-  <% rules_files.each do |rule_file| %>
+<% rules_files.each do |rule_file| %>
   - "/app/config/<%= rule_file %>"
-  <% end %>
+<% end %>
 
 # Configuration pour l'envoi des données vers InfluxDB (si configuré)
 <% if ENV["SCALINGO_INFLUX_URL"] && ENV["INFLUX_USER"] && ENV["INFLUX_PASSWORD"] %>
@@ -36,18 +30,27 @@ remote_write:
 scrape_configs:
   # Métriques de Prometheus lui-même
   - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+    metrics_path: /metrics
+    scheme: http
+    honor_labels: true
+
+  # Job pour surveiller l'application principale
+  - job_name: "web-app"
+    metrics_path: /metrics
+    scheme: https
+    static_configs:
+      - targets: ["<%= ENV["CANONICAL_HOST"] %>"]
     basic_auth:
       username: "<%= ENV["BASIC_AUTH_USERNAME"] %>"
       password: "<%= ENV["BASIC_AUTH_PASSWORD"] %>"
-    static_configs:
-      - targets: ["<%= ENV["CANONICAL_HOST"] %>"]
+    tls_config:
+      insecure_skip_verify: true
     relabel_configs:
       - source_labels: [__address__]
-        target_label: __metrics_path__
-        replacement: /metrics
-      - source_labels: [__address__]
         target_label: instance
-        regex: '([^:]+)(?::\d+)?'
+        regex: '([^:]+)'
         replacement: '${1}'
 
   # Configuration pour l'exporter personnalisé Node.js (si configuré)
@@ -75,8 +78,46 @@ scrape_configs:
         replacement: '${1}'
   <% end %>
 
-# Configuration utilisateur supplémentaire
-<% user_scrape_configs = scrape_configs %>
-<% unless user_scrape_configs.empty? %>
-<%= user_scrape_configs.to_yaml.gsub("---\n", "").gsub("[]", "") %>
-<% end %>
+  # Job pour les métriques système (si disponible)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  # Job pour les métriques de base de données (exemple PostgreSQL)
+  <% if ENV["DATABASE_METRICS_URL"] %>
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['<%= ENV["DATABASE_METRICS_URL"] %>']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    params:
+      format: ['prometheus']
+  <% end %>
+
+  # Job pour les métriques Redis (si configuré)
+  <% if ENV["REDIS_METRICS_URL"] %>
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['<%= ENV["REDIS_METRICS_URL"] %>']
+    scrape_interval: 30s
+    metrics_path: /metrics
+  <% end %>
+
+  # Job pour les métriques d'application custom
+  - job_name: 'custom-metrics'
+    scrape_interval: 30s
+    metrics_path: /custom-metrics
+    static_configs:
+      - targets: ['localhost:8080']
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'go_.+'
+        action: keep
+
+  # Configuration utilisateur supplémentaire
+  <% user_scrape_configs = scrape_configs %>
+  <% unless user_scrape_configs.empty? %>
+  <%= user_scrape_configs.to_yaml.gsub("---\n", "").gsub("[]", "") %>
+  <% end %>
