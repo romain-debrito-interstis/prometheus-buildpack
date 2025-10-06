@@ -5,67 +5,140 @@ set -e
 BUILD_DIR=${1:-}
 CACHE_DIR=${2:-}
 ENV_DIR=${3:-}
+
 basedir="$( cd -P "$( dirname "$0" )" && pwd )"
 BUILDPACK_DIR="$(readlink -f ${basedir}/..)"
+
 source ${BUILDPACK_DIR}/lib/common.sh
 
 if [ -n "$BUILDPACK_DEBUG" ]; then
   set -x
 fi
 
-PROMETHEUS_VERSION="${PROMETHEUS_VERSION:-"3.5.0"}"
+TEMPO_VERSION="${TEMPO_VERSION:-2.4.0}"
 
-install_prometheus() {
+echo "-----> Buildpack Tempo v${TEMPO_VERSION}"
+
+install_tempo() {
   local BUILD_DIR="${1}"
   local CACHE_DIR="${2}"
 
-  prometheus_dist="prometheus-${PROMETHEUS_VERSION}.linux-amd64"
-  prometheus_archive="${prometheus_dist}.tar.gz"
-  prometheus_checksums="sha256sums.txt"
-  prometheus_url="https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}"
+  tempo_archive="tempo_${TEMPO_VERSION}_linux_amd64.tar.gz"
+  tempo_url="https://github.com/grafana/tempo/releases/download/v${TEMPO_VERSION}/${tempo_archive}"
 
-  if [[ -f "$CACHE_DIR/.PROMETHEUS_VERSION" ]]; then
-    old_version=$(cat $CACHE_DIR/.PROMETHEUS_VERSION)
-    if [[ $old_version != $PROMETHEUS_VERSION ]]; then
-      echo "New Prometheus version installation, cleaning the cache for the old version"
-      rm -f $CACHE_DIR/$old_version.tar.gz ${CACHE_DIR}/${prometheus_archive}*
+  if [[ -f "$CACHE_DIR/.TEMPO_VERSION" ]]; then
+    old_version=$(cat $CACHE_DIR/.TEMPO_VERSION)
+    if [[ $old_version != $TEMPO_VERSION ]]; then
+      echo "-----> Nouvelle version détectée"
+      rm -f $CACHE_DIR/*.tar.gz
     fi
   fi
 
-  if [[ ! -f "$CACHE_DIR/${prometheus_archive}" ]]; then
-    echo -n "Downloading the Prometheus ${PROMETHEUS_VERSION} archive..."
-    curl --silent --fail --location --retry 3 --retry-delay 2 --connect-timeout 3 --max-time 30 --output ${CACHE_DIR}/${prometheus_archive} "${prometheus_url}/${prometheus_archive}"
-    echo " done"
-    echo $PROMETHEUS_VERSION > ${CACHE_DIR}/.PROMETHEUS_VERSION
+  if [[ ! -f "$CACHE_DIR/${tempo_archive}" ]]; then
+    echo "-----> Téléchargement de Tempo ${TEMPO_VERSION}..."
+    
+    curl -L --fail --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 300 \
+      -o ${CACHE_DIR}/${tempo_archive} "${tempo_url}"
+    
+    file_size=$(stat -c%s "${CACHE_DIR}/${tempo_archive}" 2>/dev/null || echo "0")
+    
+    if [ "$file_size" -lt 1000 ]; then
+      echo "ERREUR: Fichier téléchargé trop petit (${file_size} bytes)"
+      rm -f ${CACHE_DIR}/${tempo_archive}
+      exit 1
+    fi
+    
+    echo "       Téléchargé: ${file_size} bytes"
+    echo $TEMPO_VERSION > ${CACHE_DIR}/.TEMPO_VERSION
   else
-    echo "Get the Prometheus ${PROMETHEUS_VERSION} archive from the cache"
+    echo "-----> Utilisation du cache"
   fi
 
-  echo -n "Checking Prometheus archive checksum..."
-  curl --silent --fail --location --retry 3 --retry-delay 2 --connect-timeout 3 --max-time 30 --output ${CACHE_DIR}/${prometheus_archive}.sha256 "${prometheus_url}/${prometheus_checksums}"
-  if [[ $(sha256sum ${CACHE_DIR}/${prometheus_archive} | cut -f 1 -d " ") != $(cat ${CACHE_DIR}/${prometheus_archive}.sha256 | grep $prometheus_archive | cut -f 1 -d " ") ]]; then
-    echo 2>&1 "Wrong checksum"
-    return 1
+  echo "-----> Extraction de Tempo..."
+  
+  # Créer un répertoire temporaire pour l'extraction
+  temp_extract="${BUILD_DIR}/tempo_extract_$$"
+  mkdir -p "${temp_extract}"
+  
+  # Extraire dans le répertoire temporaire
+  tar xzf ${CACHE_DIR}/${tempo_archive} -C ${temp_extract}
+  
+  echo "       Fichiers extraits:"
+  ls -la ${temp_extract}
+  
+  # Créer le répertoire final pour Tempo
+  mkdir -p "${BUILD_DIR}/tempo_app"
+  
+  # Chercher et déplacer l'exécutable tempo
+  if [ -f "${temp_extract}/tempo" ]; then
+    echo "       ✓ Exécutable 'tempo' trouvé"
+    mv "${temp_extract}/tempo" "${BUILD_DIR}/tempo_app/tempo"
+  elif [ -f "${temp_extract}/tempo-linux-amd64" ]; then
+    echo "       ✓ Exécutable 'tempo-linux-amd64' trouvé"
+    mv "${temp_extract}/tempo-linux-amd64" "${BUILD_DIR}/tempo_app/tempo"
+  else
+    echo "ERREUR: Exécutable tempo non trouvé"
+    echo "Contenu du répertoire d'extraction:"
+    find ${temp_extract} -type f
+    exit 1
   fi
-  echo " ok"
-
-  echo -n "Extracting the Prometheus archive..."
-  tar xzf ${CACHE_DIR}/${prometheus_archive} --directory=$BUILD_DIR
-  mv ${BUILD_DIR}/${prometheus_dist} ${BUILD_DIR}/prometheus
-  echo " done"
-
-  echo -n "Copying the vendored scripts from the buildpack..."
-  # Copie récursive du contenu du répertoire opt
-  mkdir -p ${BUILD_DIR}/opt
-  cp -r ${BUILDPACK_DIR}/opt/* ${BUILD_DIR}/opt/
-  # Copie des fichiers à la racine
-  cp ${BUILDPACK_DIR}/opt/*.sh ${BUILD_DIR}/ 2>/dev/null || true
-  cp ${BUILDPACK_DIR}/opt/*.rb ${BUILD_DIR}/ 2>/dev/null || true
-  cp ${BUILDPACK_DIR}/opt/*.erb ${BUILD_DIR}/ 2>/dev/null || true
-  echo " done"
+  
+  # Copier aussi tempo-query et tempo-cli s'ils existent
+  [ -f "${temp_extract}/tempo-query" ] && mv "${temp_extract}/tempo-query" "${BUILD_DIR}/tempo_app/"
+  [ -f "${temp_extract}/tempo-cli" ] && mv "${temp_extract}/tempo-cli" "${BUILD_DIR}/tempo_app/"
+  
+  # Nettoyer le répertoire temporaire
+  rm -rf ${temp_extract}
+  
+  chmod +x "${BUILD_DIR}/tempo_app/tempo"
+  
+  # Vérifier que c'est bien un binaire
+  if file "${BUILD_DIR}/tempo_app/tempo" | grep -q "ELF"; then
+    echo "       ✓ Binaire ELF valide"
+  else
+    echo "ERREUR: Le fichier n'est pas un binaire valide"
+    file "${BUILD_DIR}/tempo_app/tempo"
+    exit 1
+  fi
+  
+  echo "       ✓ Extraction terminée"
 }
 
 mkdir -p $CACHE_DIR
 export_env_dir "$ENV_DIR"
+install_tempo ${BUILD_DIR} ${CACHE_DIR}
 
-install_prometheus ${BUILD_DIR} ${CACHE_DIR}
+echo "-----> Configuration de Tempo..."
+mkdir -p ${BUILD_DIR}/tempo_app/etc
+
+echo "-----> Copie des scripts..."
+cp ${BUILDPACK_DIR}/opt/boot.sh ${BUILD_DIR}/
+cp ${BUILDPACK_DIR}/opt/gen_tempo_conf.rb ${BUILD_DIR}/
+cp ${BUILDPACK_DIR}/opt/tempo.yaml.erb ${BUILD_DIR}/
+
+chmod +x ${BUILD_DIR}/boot.sh
+chmod +x ${BUILD_DIR}/gen_tempo_conf.rb
+
+export BUILDPACK_DIR
+
+if [ -f "${BUILD_DIR}/tempo.yaml" ]; then
+  echo "       Utilisation de tempo.yaml fourni"
+  cp "${BUILD_DIR}/tempo.yaml" "${BUILD_DIR}/tempo_app/etc/tempo.yaml"
+elif [ -n "$TEMPO_CONFIG_YAML" ]; then
+  echo "       Utilisation de TEMPO_CONFIG_YAML"
+  echo "$TEMPO_CONFIG_YAML" > "${BUILD_DIR}/tempo_app/etc/tempo.yaml"
+else
+  echo "       Génération de la configuration"
+  ruby ${BUILD_DIR}/gen_tempo_conf.rb > "${BUILD_DIR}/tempo_app/etc/tempo.yaml"
+fi
+
+if [ ! -f "${BUILD_DIR}/tempo_app/etc/tempo.yaml" ]; then
+  echo "ERREUR: Configuration non créée"
+  exit 1
+fi
+
+echo "       ✓ Configuration créée"
+
+rm -f ${BUILD_DIR}/gen_tempo_conf.rb ${BUILD_DIR}/tempo.yaml.erb
+
+echo "-----> ✓ Buildpack Tempo installé avec succès!"
