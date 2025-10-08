@@ -1,92 +1,35 @@
-<<<<<<< HEAD
-global:
-  scrape_interval:     <%= ENV["PROMETHEUS_GLOBAL_SCRAPE_INTERVAL"] || "1m" %>
-  evaluation_interval: <%= ENV["PROMETHEUS_GLOBAL_EVALUATION_INTERVAL"] || "1m" %>
-
-scrape_configs:
-# Get Prometheus self-metrics
-- job_name: "prometheus"
-  basic_auth:
-    username: "<%= ENV["BASIC_AUTH_USERNAME"] %>"
-    password: "<%= ENV["BASIC_AUTH_PASSWORD"] %>"
-  static_configs:
-    - targets: ["<%= ENV["CANONICAL_HOST"] %>"]
-
-# Get user-defined metrics
-=======
-# Configuration globale
 global:
   scrape_interval:     <%= ENV["PROMETHEUS_GLOBAL_SCRAPE_INTERVAL"] || "30s" %>
-  scrape_timeout:      <%= ENV["PROMETHEUS_SCRAPE_TIMEOUT"] || "10s" %>
   evaluation_interval: <%= ENV["PROMETHEUS_GLOBAL_EVALUATION_INTERVAL"] || "30s" %>
 
-# Configuration de l'interface web
-web:
-  # Activer l'authentification basique
-  enable_admin_api: true
-  page_title: "Prometheus - Tableau de bord de surveillance"
-  # Chemin vers le fichier contenant les identifiants (sera généré dynamiquement)
-  basic_auth_users: "/etc/prometheus/web_auth.yml"
-
-# Chargement des fichiers de règles
-rule_files:
-  <% rules_files.each do |rule_file| %>
-  - /etc/prometheus/<%= rule_file %>
-  <% end %>
-
-# Configuration pour l'envoi des données vers InfluxDB
 remote_write:
-  - url: "<%= ENV["INFLUXDB_URL"] || ENV["INFLUX_URL"] %>"
-    basic_auth:
-      username: "<%= ENV["INFLUX_USER"] %>"
-      password: "<%= ENV["INFLUX_PASSWORD"] %>"
-    remote_timeout: 30s
+  - url: "<%= ENV["SCALINGO_INFLUX_URL"] %>/write?db=<%= ENV["INFLUXDB_DB"] %>"
 
 scrape_configs:
-  # Métriques de Prometheus lui-même
+  # Get Prometheus self-metrics
   - job_name: "prometheus"
     basic_auth:
       username: "<%= ENV["BASIC_AUTH_USERNAME"] %>"
       password: "<%= ENV["BASIC_AUTH_PASSWORD"] %>"
     static_configs:
       - targets: ["<%= ENV["CANONICAL_HOST"] %>"]
-    # Ajout de métadonnées pour faciliter le filtrage dans InfluxDB
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __metrics_path__
-        replacement: /metrics
-      - source_labels: [__address__]
-        target_label: instance
-        regex: '([^:]+)(?::\d+)?'
-        replacement: '${1}'
 
-<<<<<<< HEAD
-  # Configuration pour l'exporter personnalisé Node.js
-  - job_name: 'nodejs-app-metrics'
-    scrape_interval: 30s
-    scrape_timeout: 10s
-    metrics_path: '/metrics'
-    scheme: https
+  # Get user-defined metrics from environment variable
+  <% JSON.parse(ENV["PROMETHEUS_SCRAPE_CONFIGS"]).each do |job| %>
+  - job_name: "<%= job['job_name'] %>"
+    scrape_interval: <%= job['scrape_interval'] || '15s' %>
+    scrape_timeout: <%= job['scrape_timeout'] || '10s' %>
+    metrics_path: <%= job['metrics_path'] || '/metrics' %>
+    scheme: <%= job['scheme'] || 'https' %>
+    <% if job['basic_auth'] %>
+    basic_auth:
+      username: "<%= job.dig('basic_auth', 'username') %>"
+      password: "<%= job.dig('basic_auth', 'password') %>"
+    <% end %>
     static_configs:
-      - targets: ['poc-logs-n8n.osc-fr1.scalingo.io']
-        labels:
-          app: 'nodejs-app'
-          env: 'production'
-          team: 'devops'
-    tls_config:
-      insecure_skip_verify: true  # À désactiver en production avec un vrai certificat
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __address__
-        replacement: ${1}:443
-      - source_labels: [__address__]
-        target_label: instance
-        regex: '([^:]+)'
-        replacement: '${1}'
-
-# Configuration utilisateur supplémentaire
->>>>>>> scalingo/master
-=======
-# Get user-defined metrics
->>>>>>> origin/master
-<%= scrape_configs.to_yaml.gsub("---\n", "") %>
+      - targets: <%= (job.dig('static_configs', 0, 'targets') || []).map { |t| t.gsub(%r{/metrics/?$}, '') }.to_json %>
+        labels: <%= job.dig('static_configs', 0, 'labels') || {}.to_json %>
+    <% if job['metric_relabel_configs'] %>
+    metric_relabel_configs: <%= job['metric_relabel_configs'].to_json %>
+    <% end %>
+  <% end %>
