@@ -1,15 +1,18 @@
 global:
-  scrape_interval:     <%= ENV["PROMETHEUS_GLOBAL_SCRAPE_INTERVAL"] || "1m" %>
-  evaluation_interval: <%= ENV["PROMETHEUS_GLOBAL_EVALUATION_INTERVAL"] || "1m" %>
+  scrape_interval:     <%= ENV["PROMETHEUS_GLOBAL_SCRAPE_INTERVAL"] || "30s" %>
+  evaluation_interval: <%= ENV["PROMETHEUS_GLOBAL_EVALUATION_INTERVAL"] || "30s" %>
+
+remote_write:
+  - url: "<%= ENV["SCALINGO_INFLUX_URL"] %>/write?db=<%= ENV["INFLUXDB_DB"] %>"
 
 scrape_configs:
-# Get Prometheus self-metrics
-- job_name: "prometheus"
-  basic_auth:
-    username: "<%= ENV["BASIC_AUTH_USERNAME"] %>"
-    password: "<%= ENV["BASIC_AUTH_PASSWORD"] %>"
-  static_configs:
-    - targets: ["<%= ENV["CANONICAL_HOST"] %>"]
+  # Get Prometheus self-metrics
+  - job_name: "prometheus"
+    basic_auth:
+      username: "<%= ENV["BASIC_AUTH_USERNAME"] %>"
+      password: "<%= ENV["BASIC_AUTH_PASSWORD"] %>"
+    static_configs:
+      - targets: ["<%= ENV["CANONICAL_HOST"] %>"]
 
-# Get user-defined metrics
-<%= scrape_configs.to_yaml.gsub("---\n", "") %>
+  # Get user-defined metrics from environment variable
+  <%= JSON.parse(ENV["PROMETHEUS_SCRAPE_CONFIGS"]).to_yaml.gsub("---\n", "") %>
