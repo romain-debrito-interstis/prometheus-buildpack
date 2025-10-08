@@ -6,7 +6,6 @@ remote_write:
   - url: "<%= ENV["SCALINGO_INFLUX_URL"] %>/write?db=<%= ENV["INFLUXDB_DB"] %>"
 
 scrape_configs:
-  # Get Prometheus self-metrics
   - job_name: "prometheus"
     basic_auth:
       username: "<%= ENV["BASIC_AUTH_USERNAME"] %>"
@@ -14,22 +13,31 @@ scrape_configs:
     static_configs:
       - targets: ["<%= ENV["CANONICAL_HOST"] %>"]
 
-  # Get user-defined metrics from environment variable
-  <% JSON.parse(ENV["PROMETHEUS_SCRAPE_CONFIGS"]).each do |job| %>
-  - job_name: "<%= job['job_name'] %>"
-    scrape_interval: <%= job['scrape_interval'] || '15s' %>
-    scrape_timeout: <%= job['scrape_timeout'] || '10s' %>
-    metrics_path: <%= job['metrics_path'] || '/metrics' %>
-    scheme: <%= job['scheme'] || 'https' %>
-    <% if job['basic_auth'] %>
-    basic_auth:
-      username: "<%= job.dig('basic_auth', 'username') %>"
-      password: "<%= job.dig('basic_auth', 'password') %>"
+  # Dynamic scrape configs from environment
+  <% begin %>
+    <% JSON.parse(ENV["PROMETHEUS_SCRAPE_CONFIGS"]).each do |job| %>
+      <%
+        # Clean up targets by removing any trailing slashes and metrics paths
+        targets = job.dig('static_configs', 0, 'targets')&.map do |target|
+          target.gsub(%r{/metrics/?$}, '')
+               .gsub(%r{/webhook-test/metrics/?$}, '')
+               .gsub(%r{/scrape/?$}, '')
+        end
+      %>
+      - job_name: "<%= job['job_name'] %>"
+        scrape_interval: <%= job['scrape_interval'] || '15s' %>
+        scrape_timeout: <%= job['scrape_timeout'] || '10s' %>
+        metrics_path: <%= job['metrics_path'] || '/metrics' %>
+        scheme: <%= job['scheme'] || 'https' %>
+        static_configs:
+          - targets: <%= targets.to_json %>
+            <%- if job.dig('static_configs', 0, 'labels') %>
+            labels: <%= job.dig('static_configs', 0, 'labels').to_json %>
+            <%- end %>
+        <%- if job['metric_relabel_configs'] %>
+        metric_relabel_configs: <%= job['metric_relabel_configs'].to_json %>
+        <%- end %>
     <% end %>
-    static_configs:
-      - targets: <%= (job.dig('static_configs', 0, 'targets') || []).map { |t| t.gsub(%r{/metrics/?$}, '') }.to_json %>
-        labels: <%= job.dig('static_configs', 0, 'labels') || {}.to_json %>
-    <% if job['metric_relabel_configs'] %>
-    metric_relabel_configs: <%= job['metric_relabel_configs'].to_json %>
-    <% end %>
+  <% rescue => e %>
+    # Error parsing PROMETHEUS_SCRAPE_CONFIGS: <%= e.message %>
   <% end %>
