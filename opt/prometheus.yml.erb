@@ -5,6 +5,7 @@ global:
 remote_write:
   - url: "<%= ENV["SCALINGO_INFLUX_URL"] %>/write?db=<%= ENV["INFLUXDB_DB"] %>"
 
+
 scrape_configs:
   - job_name: "prometheus"
     basic_auth:
