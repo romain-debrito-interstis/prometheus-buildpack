@@ -1,5 +1,5 @@
 global:
-  scrape_interval:     <%= ENV["PROMETHEUS_GLOBAL_SCRAPE_INTERVAL"] || "30s" %>
+  scrape_interval: <%= ENV["PROMETHEUS_GLOBAL_SCRAPE_INTERVAL"] || "30s" %>
   evaluation_interval: <%= ENV["PROMETHEUS_GLOBAL_EVALUATION_INTERVAL"] || "30s" %>
 
 remote_write:
@@ -13,31 +13,35 @@ scrape_configs:
     static_configs:
       - targets: ["<%= ENV["CANONICAL_HOST"] %>"]
 
-  # Dynamic scrape configs from environment
-  <% begin %>
-    <% JSON.parse(ENV["PROMETHEUS_SCRAPE_CONFIGS"]).each do |job| %>
-      <%
-        # Clean up targets by removing any trailing slashes and metrics paths
-        targets = job.dig('static_configs', 0, 'targets')&.map do |target|
-          target.gsub(%r{/metrics/?$}, '')
-               .gsub(%r{/webhook-test/metrics/?$}, '')
-               .gsub(%r{/scrape/?$}, '')
-        end
-      %>
-      - job_name: "<%= job['job_name'] %>"
-        scrape_interval: <%= job['scrape_interval'] || '15s' %>
-        scrape_timeout: <%= job['scrape_timeout'] || '10s' %>
-        metrics_path: <%= job['metrics_path'] || '/metrics' %>
-        scheme: <%= job['scheme'] || 'https' %>
-        static_configs:
-          - targets: <%= targets.to_json %>
-            <%- if job.dig('static_configs', 0, 'labels') %>
-            labels: <%= job.dig('static_configs', 0, 'labels').to_json %>
-            <%- end %>
-        <%- if job['metric_relabel_configs'] %>
-        metric_relabel_configs: <%= job['metric_relabel_configs'].to_json %>
-        <%- end %>
-    <% end %>
-  <% rescue => e %>
-    # Error parsing PROMETHEUS_SCRAPE_CONFIGS: <%= e.message %>
-  <% end %>
+  # Static configuration for node-app
+  - job_name: "node-app"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: https
+    static_configs:
+      - targets: ["poc-nodejs.osc-fr1.scalingo.io"]
+        labels:
+          environment: production
+          team: backend
+          app_type: nodejs
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: node_(.*)
+        target_label: component
+        replacement: nodejs
+
+  # Static configuration for custom-scraper
+  - job_name: "custom-scraper"
+    scrape_interval: 30s
+    scrape_timeout: 20s
+    metrics_path: /webhook-test/metrics
+    scheme: https
+    static_configs:
+      - targets: ["poc-logs-n8n.osc-fr1.scalingo.io"]
+        labels:
+          environment: production
+          team: monitoring
+          app_type: custom_scraper
+    params:
+      format: ["prometheus"]
