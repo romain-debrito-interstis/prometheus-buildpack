@@ -1,1 +1,1 @@
-web: ./prometheus --config.file=opt/prometheus.yml --web.listen-address=:$PORT
+web: /app/boot.sh
