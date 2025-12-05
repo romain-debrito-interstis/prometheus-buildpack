@@ -3,7 +3,7 @@ global:
   evaluation_interval: <%= ENV["PROMETHEUS_GLOBAL_EVALUATION_INTERVAL"] || "1m" %>
 
 remote_write:
-  - url: "<%= ENV['SCALINGO_INFLUX_URL'] %>"
+  - url: "<%= ENV['SCALINGO_INFLUX_URL_DB'] %>"
 
 scrape_configs:
 # Get Prometheus self-metrics
